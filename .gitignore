@@ -11,4 +11,7 @@ __pycache__/
 TODO.md
 .venv
 test_clob.py
-data/ema_bias.json
+data/ema_bias.jsondata/raw/
+logs/
+data/state.json
+__pycache__/
