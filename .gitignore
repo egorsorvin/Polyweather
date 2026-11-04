@@ -1,8 +1,6 @@
 .env
-data/model_forecasts_day1.csv
 data/polymarket_winners.csv
 data/state.json
-data/wu_historical.csv
 data/wu_progress.json
 logs/
 __pycache__/
