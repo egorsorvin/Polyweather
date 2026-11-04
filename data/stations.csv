@@ -1,0 +1,54 @@
+city,icao,lat,lon,elev_m,station_name,timezone,unit,latest_source,n_events,volume_musd,first_event,last_event
+london,EGLC,51.505,0.055,10,London City Arpt,Europe/London,C,aviationweather.gov,640,98.61,2025-02-01,2026-11-06
+nyc,KLGA,40.77945,-73.88027,9,New York/La Guardia Arpt,America/New_York,F,aviationweather.gov,614,75.19,2025-02-01,2026-11-06
+seoul,RKSI,37.469,126.451,7,Seoul/Incheon Intl,Asia/Seoul,C,aviationweather.gov,333,59.25,2025-12-06,2026-11-06
+hong-kong,HKO,22.302,114.174,32,Hong Kong Observatory HQ,Asia/Hong_Kong,C,see description,234,48.43,2026-03-13,2026-11-06
+shanghai,ZSPD,31.146,121.8,4,Shanghai/Pudong Intl,Asia/Shanghai,C,aviationweather.gov,236,35.68,2026-03-13,2026-11-06
+paris,LFPB,48.967,2.428,50,Paris/Le Bourge Arpt,Europe/Paris,C,aviationweather.gov,263,30.27,2026-02-11,2026-11-06
+wellington,NZWN,-41.331,174.806,12,Wellington Intl,Pacific/Auckland,C,aviationweather.gov,286,25.91,2026-01-22,2026-11-06
+tokyo,RJTT,35.553,139.781,5,Tokyo/Haneda Intl,Asia/Tokyo,C,aviationweather.gov,239,22.75,2026-03-10,2026-11-06
+miami,KMIA,25.78806,-80.31692,1,Miami Intl,America/New_York,F,aviationweather.gov,287,21.92,2025-12-04,2026-11-06
+atlanta,KATL,33.62972,-84.44223,309,Atlanta/Hartsfield-Jackson Intl,America/New_York,F,aviationweather.gov,332,21.87,2025-12-05,2026-11-06
+dallas,KDAL,32.83836,-96.83584,148,Dallas/Love Fld,America/Chicago,F,aviationweather.gov,334,21.82,2025-12-04,2026-11-06
+beijing,ZBAA,40.082,116.603,31,Beijing Intl,Asia/Shanghai,C,aviationweather.gov,229,21.77,2026-03-21,2026-11-06
+toronto,CYYZ,43.679,-79.629,171,Toronto/Pearson Intl,America/Toronto,C,aviationweather.gov,333,21.4,2025-12-06,2026-11-06
+shenzhen,ZGSZ,22.639,113.803,18,Shenzhen/Boan Intl,Asia/Shanghai,C,aviationweather.gov,229,20.96,2026-03-21,2026-11-06
+madrid,LEMD,40.466,-3.555,589,Madrid/Barajas Arpt,Europe/Madrid,C,aviationweather.gov,233,20.16,2026-03-16,2026-11-06
+seattle,KSEA,47.44467,-122.31442,115,Seattle-Tacoma Intl,America/Los_Angeles,F,aviationweather.gov,331,19.83,2025-12-05,2026-11-06
+chicago,KORD,41.96017,-87.93161,202,Chicago/O'Hare Intl,America/Chicago,F,aviationweather.gov,287,19.82,2025-12-04,2026-11-06
+munich,EDDM,48.348,11.813,445,Munich Intl,Europe/Berlin,C,aviationweather.gov,244,19.34,2026-03-05,2026-11-06
+ankara,LTAC,40.128,32.995,952,Ankara/Esenboğa Intl,Europe/Istanbul,C,aviationweather.gov,286,19.24,2026-01-22,2026-11-06
+buenos-aires,SAEZ,-34.822,-58.536,16,Buenos Aires/Pistarini Arpt,America/Argentina/Buenos_Aires,C,aviationweather.gov,330,18.12,2025-12-06,2026-11-06
+taipei,RCSS,25.069,121.552,8,Taipei/Songshan Arpt,Asia/Taipei,C,aviationweather.gov,233,17.06,2026-03-17,2026-11-06
+chengdu,ZUUU,30.576,103.95,494,Chengdu/Shuangliu Intl,Asia/Shanghai,C,aviationweather.gov,228,16.28,2026-03-21,2026-11-06
+singapore,WSSS,1.368,103.982,17,Singapore/Changi Intl,Asia/Singapore,C,aviationweather.gov,236,16.13,2026-03-13,2026-11-06
+los-angeles,KLAX,33.93817,-118.3866,30,Los Angeles Intl,America/Los_Angeles,F,aviationweather.gov,226,15.44,2025-12-04,2026-11-06
+milan,LIMC,45.631,8.728,221,Milan/Malpensa Arpt,Europe/Rome,C,aviationweather.gov,233,14.15,2026-03-16,2026-11-06
+chongqing,ZUCK,29.718,106.639,416,Chongqing/Jiangbei Intl,Asia/Shanghai,C,aviationweather.gov,229,13.75,2026-03-21,2026-11-06
+guangzhou,ZGGG,23.392,113.307,11,Guangzhou/Baiyun Intl,Asia/Shanghai,C,aviationweather.gov,204,13.59,2026-04-15,2026-11-06
+sao-paulo,SBGR,-23.432,-46.469,745,Sao Paulo Intl,America/Sao_Paulo,C,aviationweather.gov,261,13.56,2026-02-11,2026-11-06
+amsterdam,EHAM,52.315,4.79,-2,Amsterdam/Schiphol Arpt,Europe/Amsterdam,C,aviationweather.gov,216,12.72,2026-04-03,2026-11-06
+wuhan,ZHHH,30.783,114.205,33,Wuhan/Tianhe Intl,Asia/Shanghai,C,aviationweather.gov,229,12.64,2026-03-21,2026-11-06
+warsaw,EPWA,52.163,20.961,107,Warsaw/Chopin Arpt,Europe/Warsaw,C,aviationweather.gov,233,11.94,2026-03-16,2026-11-06
+san-francisco,KSFO,37.61961,-122.36561,2,San Francisco Intl,America/Los_Angeles,F,aviationweather.gov,224,11.72,2026-03-24,2026-11-06
+tel-aviv,LLBG,32.011,34.887,35,Tel Aviv/Ben Gurion Arpt,Asia/Jerusalem,C,aviationweather.gov,239,11.5,2026-03-10,2026-11-06
+moscow,UUWW,55.592,37.261,195,Moscow/Vnukovo Arpt,Europe/Moscow,C,aviationweather.gov,219,11.18,2026-03-30,2026-11-06
+denver,KDEN,39.84657,-104.65623,1656,Denver Intl,America/Denver,F,aviationweather.gov,226,11.01,2025-12-04,2026-11-06
+kuala-lumpur,WMKK,2.747,101.714,21,Kuala Lumpur Intl,Asia/Kuala_Lumpur,C,aviationweather.gov,216,10.91,2026-04-03,2026-11-06
+busan,RKPK,35.179,128.938,3,Busan/Gimhae Intl,Asia/Seoul,C,aviationweather.gov,216,10.84,2026-04-03,2026-11-06
+helsinki,EFHK,60.327,24.957,56,Helsinki/Vantaa Arpt,Europe/Helsinki,C,aviationweather.gov,216,10.66,2026-04-03,2026-11-06
+austin,KAUS,30.1831,-97.68063,148,Austin/Bergstrom Intl,America/Chicago,F,aviationweather.gov,223,10.61,2026-03-24,2026-11-06
+istanbul,LTFM,41.262,28.74,99,Istanbul Arpt,Europe/Istanbul,C,aviationweather.gov,220,10.44,2026-03-30,2026-11-06
+lucknow,VILK,26.761,80.889,121,Lucknow/Singh Arpt,Asia/Kolkata,C,aviationweather.gov,244,10.34,2026-03-05,2026-11-06
+houston,KHOU,29.64582,-95.28214,13,Houston/Hobby Arpt,America/Chicago,F,aviationweather.gov,224,10.2,2026-03-24,2026-11-06
+cape-town,FACT,-33.965,18.602,48,Capetown Intl,Africa/Johannesburg,C,aviationweather.gov,209,9.02,2026-04-09,2026-11-06
+mexico-city,MMMX,19.436,-99.072,2224,Mexico City Intl,America/Mexico_City,C,aviationweather.gov,218,8.0,2026-03-30,2026-11-06
+qingdao,ZSQD,36.362,120.087,2,Qingdao/Jiaodong Arpt,Asia/Shanghai,C,aviationweather.gov,192,7.63,2026-04-27,2026-11-06
+manila,RPLL,14.507,121.004,15,Manila/Aquino Intl,Asia/Manila,C,aviationweather.gov,204,7.3,2026-04-15,2026-11-06
+jeddah,OEJN,21.685,39.166,8,Jeddah/King Abdulaziz Intl,Asia/Riyadh,C,aviationweather.gov,210,7.17,2026-04-09,2026-11-06
+karachi,OPKC,24.902,67.139,20,Karachi/Jinnah Intl,Asia/Karachi,C,aviationweather.gov,204,6.02,2026-04-15,2026-11-06
+panama-city,MPMG,8.967,-79.555,6,Panama/Gelabert Intl,America/Panama,C,aviationweather.gov,214,5.23,2026-04-03,2026-11-06
+jakarta,WIHH,-6.267,106.891,26,Jakarta/Perdanakusum,Asia/Jakarta,C,wunderground.com,46,3.23,2026-04-03,2026-05-21
+lagos,DNMM,6.577,3.321,27,Lagos/Muhammed Intl,Africa/Lagos,C,wunderground.com,37,2.71,2026-04-09,2026-05-15
+zhengzhou,ZHCC,34.52,113.834,149,Zhengzhou/Xinzheng Arpt,Asia/Shanghai,C,weather.gov,59,0.42,2026-05-20,2026-10-01
+jinan,ZSJN,36.856,117.206,22,Jinan Yaoqiang Intl,Asia/Shanghai,C,wunderground.com,57,0.32,2026-05-20,2026-09-29
