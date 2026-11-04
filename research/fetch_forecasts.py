@@ -36,8 +36,8 @@ Examples
 --------
   python research/fetch_forecasts.py probe
   python research/fetch_forecasts.py previous --start 2024-01-01
-  python research/fetch_forecasts.py single --start 2025-09-01 --top 20
-  python research/fetch_forecasts.py single --start 2025-09-01 --top 20 --apikey XXXX   # paid plan
+  python research/fetch_forecasts.py single --start 2026-04-02
+  python research/fetch_forecasts.py single --start 2026-04-02 --apikey XXXX   # paid plan
 """
 import argparse
 import csv
@@ -61,9 +61,17 @@ PREVIOUS_MODELS = [
     "cma_grapes_global",
 ]
 SINGLE_MODELS = [
-    "ecmwf_ifs025", "ecmwf_aifs025_single", "icon_global", "gfs025", "gem_global",
+    "ecmwf_ifs025", "ecmwf_aifs025_single", "icon_global", "gfs_global", "gem_global",
     "ukmo_global_deterministic_10km", "jma_gsm", "meteofrance_arpege_world",
 ]
+# first available 00z run per model on the Single Runs API (found with probe-start,
+# Nov 2026). Earlier runs are skipped instead of wasting requests on errors.
+SINGLE_FIRST_RUN = {
+    "ecmwf_ifs025": "2026-04-02", "ecmwf_aifs025_single": "2026-04-02",
+    "icon_global": "2026-04-02", "gfs_global": "2026-04-02",
+    "ukmo_global_deterministic_10km": "2026-04-02", "meteofrance_arpege_world": "2026-04-02",
+    "jma_gsm": "2026-05-13", "gem_global": "2026-08-19",
+}
 PREVIOUS_VARS = ["temperature_2m", "temperature_2m_previous_day1", "temperature_2m_previous_day2"]
 RUN_HOURS = (0, 12)
 
@@ -137,6 +145,13 @@ def append_rows(path: Path, header: list, rows: list):
         if new:
             w.writerow(header)
         w.writerows(rows)
+
+
+def split_models(hourly: dict, var: str, models: list) -> dict:
+    """{model: values} from an Open-Meteo hourly block (suffix _<model> when >1 model)."""
+    if len(models) == 1:
+        return {models[0]: hourly.get(var, [])}
+    return {m: hourly.get(f"{var}_{m}", []) for m in models}
 
 
 # ─── probe ────────────────────────────────────────────────────────────────────
@@ -231,21 +246,33 @@ def fetch_previous(args):
             if key in done:
                 continue
             rows = []
-            # one model per request keeps the weighted cost low and isolates failures
-            for m in args.models or PREVIOUS_MODELS:
+            models = args.models or PREVIOUS_MODELS
+            # all models in one request (cheaper); fall back to one model per request on error
+            groups = [models]
+            d = None
+            while groups:
+                grp = groups.pop(0)
                 d = call(url, {"latitude": st["lat"], "longitude": st["lon"], "timezone": "GMT",
-                               "hourly": ",".join(PREVIOUS_VARS), "models": m,
+                               "hourly": ",".join(PREVIOUS_VARS), "models": ",".join(grp),
                                "start_date": lo.isoformat(), "end_date": hi.isoformat()},
                          args.apikey, args.interval)
                 if d.get("error"):
-                    print(f"  {st['city']} {lo} {m}: {d.get('reason')}")
+                    if len(grp) > 1:
+                        groups.extend([m] for m in grp)
+                    else:
+                        print(f"  {st['city']} {lo} {grp[0]}: {d.get('reason')}")
                     continue
                 h = d["hourly"]
-                cols = [h.get(v, [None] * len(h["time"])) for v in PREVIOUS_VARS]
-                for i, t in enumerate(h["time"]):
-                    vals = [c[i] for c in cols]
-                    if any(v is not None for v in vals):
-                        rows.append([t, m] + ["" if v is None else v for v in vals])
+                per_var = {v: split_models(h, v, grp) for v in PREVIOUS_VARS}
+                for m in grp:
+                    if len(grp) > 1 and not any(x is not None for v in PREVIOUS_VARS for x in per_var[v][m]):
+                        groups.append([m])                  # empty in combined reply: retry alone
+                        continue
+                    cols = [per_var[v][m] or [None] * len(h["time"]) for v in PREVIOUS_VARS]
+                    for i, t in enumerate(h["time"]):
+                        vals = [c[i] for c in cols]
+                        if any(v is not None for v in vals):
+                            rows.append([t, m] + ["" if v is None else v for v in vals])
             append_rows(path, ["time_utc", "model", "lead0", "lead1d", "lead2d"], rows)
             mark_done("previous", key)
             print(f"{st['city']:14s} {lo} .. {hi}: {len(rows)} values")
@@ -268,30 +295,41 @@ def fetch_single(args):
             if run < now - timedelta(hours=12):
                 runs.append(run)
         d += timedelta(days=1)
-    total = len(runs) * len(stations) * len(models)
-    print(f"{len(stations)} stations x {len(runs)} runs x {len(models)} models = {total} requests (minus done)")
-    # loop runs outermost so that an interrupted download still covers all cities evenly
+    print(f"{len(stations)} stations x {len(runs)} runs = {len(stations) * len(runs)} requests "
+          f"(all models per request; minus already done)")
+    # oldest runs first: if Open-Meteo keeps a rolling window, those disappear first
     for run in runs:
         run_s = run.strftime("%Y-%m-%dT%H:%M")
+        avail = [m for m in models if run_s[:10] >= SINGLE_FIRST_RUN.get(m, "2000-01-01")]
+        n_rows = 0
         for st in stations:
-            for m in models:
-                key = f"{st['city']}|{m}|{run_s}"
-                if key in done:
-                    continue
+            key = f"{st['city']}|{run_s}"
+            if key in done or not avail:
+                continue
+            rows = []
+            groups = [avail]
+            while groups:
+                grp = groups.pop(0)
                 d = call(url, {"latitude": st["lat"], "longitude": st["lon"], "timezone": "GMT",
-                               "hourly": "temperature_2m", "models": m, "run": run_s,
+                               "hourly": "temperature_2m", "models": ",".join(grp), "run": run_s,
                                "forecast_days": 3}, args.apikey, args.interval)
                 if d.get("error"):
-                    # unavailable run/model: record so we don't retry forever
-                    print(f"  {st['city']} {m} {run_s}: {d.get('reason')}")
-                    mark_done("single", key)
+                    if len(grp) > 1:
+                        groups.extend([m] for m in grp)      # find the model that fails
+                    else:
+                        print(f"  {st['city']} {grp[0]} {run_s}: {d.get('reason')}")
                     continue
                 h = d["hourly"]
-                rows = [[run_s, t, m, v] for t, v in zip(h["time"], h.get("temperature_2m", [])) if v is not None]
-                append_rows(OUT / "single" / f"{st['city']}.csv.gz",
-                            ["run_utc", "time_utc", "model", "value"], rows)
-                mark_done("single", key)
-        print(f"run {run_s} done")
+                for m, vals in split_models(h, "temperature_2m", grp).items():
+                    if len(grp) > 1 and not any(v is not None for v in vals):
+                        groups.append([m])                  # empty in combined reply: retry alone
+                        continue
+                    rows.extend([run_s, t, m, v] for t, v in zip(h["time"], vals) if v is not None)
+            append_rows(OUT / "single" / f"{st['city']}.csv.gz",
+                        ["run_utc", "time_utc", "model", "value"], rows)
+            mark_done("single", key)
+            n_rows += len(rows)
+        print(f"run {run_s}: {n_rows} values")
 
 
 def main():
