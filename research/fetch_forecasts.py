@@ -16,6 +16,7 @@ Modes
 -----
   probe     one tiny request per model on both APIs -> prints what is available.
             Run this first and send me the output.
+  probe-start  binary-search the earliest available Single Run per model.
   previous  Previous Runs API: for each hour, the value forecast N days earlier
             (temperature_2m, _previous_day1, _previous_day2). Cheap: ~1 request
             per city per month. Used for model training (long history).
@@ -57,7 +58,7 @@ OUT = Path("data/forecasts")
 PREVIOUS_MODELS = [
     "ecmwf_ifs025", "ecmwf_aifs025_single", "icon_seamless", "gfs_seamless",
     "gem_seamless", "ukmo_seamless", "jma_seamless", "meteofrance_seamless",
-    "cma_grapes_global", "ncep_gfs_graphcast025",
+    "cma_grapes_global",
 ]
 SINGLE_MODELS = [
     "ecmwf_ifs025", "ecmwf_aifs025_single", "icon_global", "gfs025", "gem_global",
@@ -168,6 +169,45 @@ def probe(args):
                 print(f"  {run} {m:32s} {sum(v is not None for v in vals)}/{len(vals)} values")
 
 
+# ─── earliest available single run (binary search) ───────────────────────────
+
+GFS_CANDIDATES = ["gfs025", "gfs_global", "gfs013", "gfs_seamless", "ncep_gfs025", "ncep_gfs013"]
+
+
+def _has_run(st, model, run_day: date, apikey) -> bool:
+    d = call(api_url("single", apikey), {"latitude": st["lat"], "longitude": st["lon"], "timezone": "GMT",
+             "hourly": "temperature_2m", "models": model, "run": f"{run_day.isoformat()}T00:00",
+             "forecast_days": 2}, apikey, 1.0)
+    if d.get("error"):
+        return False
+    return any(v is not None for v in d["hourly"].get("temperature_2m", []))
+
+
+def probe_start(args):
+    """Find the first date with an available 00z run, per model (assumes no gaps)."""
+    st = load_stations(1)[0]
+    recent = date.today() - timedelta(days=3)
+    print("GFS name candidates (run 3 days ago):")
+    for m in GFS_CANDIDATES:
+        print(f"  {m:20s} {'OK' if _has_run(st, m, recent, args.apikey) else 'no data'}")
+    print("\nearliest available 00z run per model:")
+    for m in args.models or SINGLE_MODELS:
+        if not _has_run(st, m, recent, args.apikey):
+            print(f"  {m:32s} no recent data, skipped")
+            continue
+        lo, hi = date(2024, 1, 1), recent      # invariant: hi available
+        if _has_run(st, m, lo, args.apikey):
+            print(f"  {m:32s} available since <= {lo}")
+            continue
+        while (hi - lo).days > 1:
+            mid = lo + (hi - lo) / 2
+            if _has_run(st, m, mid, args.apikey):
+                hi = mid
+            else:
+                lo = mid
+        print(f"  {m:32s} earliest {hi}  ({(date.today() - hi).days} days back)")
+
+
 # ─── previous runs ────────────────────────────────────────────────────────────
 
 def month_chunks(start: date, end: date):
@@ -256,7 +296,7 @@ def fetch_single(args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["probe", "previous", "single"])
+    ap.add_argument("mode", choices=["probe", "probe-start", "previous", "single"])
     ap.add_argument("--start", default="2024-01-01")
     ap.add_argument("--top", type=int, default=0, help="only the N most liquid cities (0 = all)")
     ap.add_argument("--models", nargs="*", help="override model list")
@@ -264,7 +304,8 @@ def main():
     ap.add_argument("--interval", type=float, default=0.8, help="min seconds between requests")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    {"probe": probe, "previous": fetch_previous, "single": fetch_single}[args.mode](args)
+    {"probe": probe, "probe-start": probe_start, "previous": fetch_previous,
+     "single": fetch_single}[args.mode](args)
 
 
 if __name__ == "__main__":
