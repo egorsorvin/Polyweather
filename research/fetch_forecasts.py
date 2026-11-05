@@ -31,6 +31,8 @@ Output
                                           (lead0 = latest run, lead1d = run ~24h earlier, ...)
   data/forecasts/single/<city>.csv.gz     run_utc, time_utc, model, value
   data/forecasts/_done_<mode>.txt         progress log (resume)
+  data/forecasts/_missing_single.txt      (city, run, model) that were unavailable;
+                                          retry with: single --retry-missing
 
 Examples
 --------
@@ -280,7 +282,63 @@ def fetch_previous(args):
 
 # ─── single runs ──────────────────────────────────────────────────────────────
 
+MISSING = OUT / "_missing_single.txt"
+
+
+def log_missing(city: str, run_s: str, model: str):
+    with MISSING.open("a") as f:
+        f.write(f"{city}|{run_s}|{model}\n")
+
+
+def retry_missing(args):
+    """Re-request every (city, run, model) that came back unavailable before."""
+    todo = set(MISSING.read_text().split()) if MISSING.exists() else set()
+    # also audit the downloaded files: every done (city, run) should have all models that
+    # existed at that date; anything absent is a gap (covers runs fetched by older versions)
+    models = args.models or SINGLE_MODELS
+    done = done_set("single")
+    for f in sorted((OUT / "single").glob("*.csv.gz")):
+        city = f.name.split(".")[0]
+        have = set()
+        try:
+            with gzip.open(f, "rt", newline="") as fh:
+                for row in csv.reader(fh):
+                    if len(row) >= 3 and row[0] != "run_utc":
+                        have.add((row[0], row[2]))
+        except (EOFError, OSError):
+            pass  # truncated tail from an interrupted write: keep what was readable
+        runs = {k.split("|")[1] for k in done if k.startswith(city + "|")}
+        for run_s in runs:
+            for m in models:
+                if run_s[:10] >= SINGLE_FIRST_RUN.get(m, "2000-01-01") and (run_s, m) not in have:
+                    todo.add(f"{city}|{run_s}|{m}")
+    todo = sorted(todo)
+    print(f"{len(todo)} missing (city, run, model) to retry")
+    stations = {s["city"]: s for s in load_stations(0)}
+    url = api_url("single", args.apikey)
+    still, n_ok = [], 0
+    for item in todo:
+        city, run_s, model = item.split("|")
+        st = stations.get(city)
+        if st is None:
+            continue
+        d = call(url, {"latitude": st["lat"], "longitude": st["lon"], "timezone": "GMT",
+                       "hourly": "temperature_2m", "models": model, "run": run_s,
+                       "forecast_days": 3}, args.apikey, args.interval)
+        vals = [] if d.get("error") else d["hourly"].get("temperature_2m", [])
+        if not any(v is not None for v in vals):
+            still.append(item)
+            continue
+        rows = [[run_s, t, model, v] for t, v in zip(d["hourly"]["time"], vals) if v is not None]
+        append_rows(OUT / "single" / f"{city}.csv.gz", ["run_utc", "time_utc", "model", "value"], rows)
+        n_ok += 1
+    MISSING.write_text("".join(x + "\n" for x in still))
+    print(f"recovered {n_ok}, still missing {len(still)}")
+
+
 def fetch_single(args):
+    if args.retry_missing:
+        return retry_missing(args)
     (OUT / "single").mkdir(parents=True, exist_ok=True)
     done = done_set("single")
     stations = load_stations(args.top)
@@ -310,6 +368,7 @@ def fetch_single(args):
                 continue
             rows = []
             want = [m for m in avail if m not in missing]
+            got = set()
             groups = [want] if want else []
             while groups:
                 grp = groups.pop(0)
@@ -321,9 +380,11 @@ def fetch_single(args):
                         groups.extend([m] for m in grp)      # find the model that fails
                     elif "not available" in str(d.get("reason", "")):
                         missing.add(grp[0])
-                        print(f"  {grp[0]} {run_s}: run not available, skipping it for all cities")
+                        print(f"  {grp[0]} {run_s}: run not available, skipping it for all cities "
+                              f"(logged, retry later with --retry-missing)")
                     else:
                         print(f"  {st['city']} {grp[0]} {run_s}: {d.get('reason')}")
+                        log_missing(st["city"], run_s, grp[0])
                     continue
                 h = d["hourly"]
                 for m, vals in split_models(h, "temperature_2m", grp).items():
@@ -331,8 +392,13 @@ def fetch_single(args):
                         groups.append([m])                  # empty in combined reply: retry alone
                         continue
                     rows.extend([run_s, t, m, v] for t, v in zip(h["time"], vals) if v is not None)
+                    if any(v is not None for v in vals):
+                        got.add(m)
             append_rows(OUT / "single" / f"{st['city']}.csv.gz",
                         ["run_utc", "time_utc", "model", "value"], rows)
+            for m in avail:
+                if m not in got:
+                    log_missing(st["city"], run_s, m)
             mark_done("single", key)
             n_rows += len(rows)
         if n_skipped == len(stations):
@@ -349,6 +415,8 @@ def main():
     ap.add_argument("--models", nargs="*", help="override model list")
     ap.add_argument("--apikey", default="", help="Open-Meteo commercial key (optional)")
     ap.add_argument("--interval", type=float, default=0.8, help="min seconds between requests")
+    ap.add_argument("--retry-missing", action="store_true",
+                    help="single mode: re-request runs/models that were unavailable before")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     {"probe": probe, "probe-start": probe_start, "previous": fetch_previous,
