@@ -301,10 +301,11 @@ def fetch_single(args):
     for run in runs:
         run_s = run.strftime("%Y-%m-%dT%H:%M")
         avail = [m for m in models if run_s[:10] >= SINGLE_FIRST_RUN.get(m, "2000-01-01")]
-        n_rows = 0
+        n_rows = n_skipped = 0
         for st in stations:
             key = f"{st['city']}|{run_s}"
             if key in done or not avail:
+                n_skipped += 1
                 continue
             rows = []
             groups = [avail]
@@ -329,7 +330,10 @@ def fetch_single(args):
                         ["run_utc", "time_utc", "model", "value"], rows)
             mark_done("single", key)
             n_rows += len(rows)
-        print(f"run {run_s}: {n_rows} values")
+        if n_skipped == len(stations):
+            print(f"run {run_s}: already downloaded, skipped")
+        else:
+            print(f"run {run_s}: {n_rows} values" + (f" ({n_skipped} cities already done)" if n_skipped else ""))
 
 
 def main():
