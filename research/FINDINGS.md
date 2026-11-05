@@ -76,3 +76,22 @@ scheduled minutes (e.g. RKSI :00/:30, EGLC :20/:50).
 **Consequence for modelling:** the label is the bucket the market actually resolved to; the METAR
 value is used where it agrees, and for intraday running max (nowcasting). The current regime is
 reproduced exactly, so live trading logic can rely on it.
+
+## 7. Favourite overpricing (Qiu & Qiu) is not tradeable (step 2) — `research/favourite_test.py`
+
+Setup: on the target day at local 06/09/11/12/13 h, take the event's favourite bucket
+(last YES trade 0.75–0.95, ≤2 h old) and buy NO. 4,740 favourite snapshots, all closed events.
+
+* **Realised NO hit rate ≈ implied NO price** (e.g. 12 h: 0.179 vs 0.155; 13 h: 0.156 vs 0.151).
+  Favourites are at most ~1–2 pp overpriced, not ~10 pp.
+* Buying NO at the implied price (zero slippage): ROI +3.1 %, t = 0.3 (noise).
+  With 1¢ slippage: −3.4 % (t −1.8); 2¢: −9.1 % (t −3.8). Since Apr 2026 (fees on):
+  −5.1 % even at zero slippage.
+* Takers who actually bought NO in the 30 min after T paid on average **0.237** while the
+  implied NO price at T was **0.165**: NO buying happens when the favourite is already
+  collapsing (information arriving, e.g. a new report) — momentum / adverse selection,
+  not a free discount.
+* Mirror (buy YES on favourite): ≈ 0 to slightly negative.
+
+**Conclusion:** no price-only edge here either. The interesting signal is the post-T price
+move itself: prices react to information during the day → that is hypothesis C (nowcasting).
