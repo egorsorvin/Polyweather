@@ -47,3 +47,32 @@ Weather markets have taker fees since Apr 2026: `feeSchedule = {rate 0.05, expon
 Any edge must come from *information*: a better probability than the market at the moment of
 trading (better post-processing, faster reaction to new model runs, intraday METAR nowcasting),
 large enough to beat ~2–4 % taker fee (or be captured as a maker).
+
+## 6. Resolver check (step 1, Nov 2026) — `research/resolver.py`
+
+Settlement value rebuilt from raw METAR (IEM archive, `research/fetch_metar.py`) under each
+event's own rule regime, compared with the bucket the market actually resolved to.
+
+| regime | events | match |
+|---|---|---|
+| **AWC** (aviationweather METAR API, routine only, from 2026-10-23) | 598 | **100.0 %** |
+| NOAA (weather.gov/wrh/timeseries, 2026-08-23 .. 10-22) | 3,328 | 99.0 % |
+| WU (Wunderground, to 2026-08-22) | 8,589 | 98.2 % |
+
+Not rebuildable: Hong Kong (HKO, 229 events), early Taipei (CWA, 7), 65 days with missing METAR
+(mostly Jinan ZSJN).
+
+Known disagreements (old regimes only):
+* **Shenzhen, WU period: 24 % match.** Rule names ZGSZ, but the WU page evidently carried another
+  station's data (±1..4 °C both ways); not reproducible from airport METAR.
+* **Seoul, WU period: 89 %**, ±1 °C both ways (WU-specific handling of RKSI).
+* NOAA period: Moscow/Denver match better with routine-only reports, other cities with all
+  reports; consistent with NOAA silently missing some reports. Overall 99.0 % either way.
+
+IEM notes: report type 1 = MADIS 5-minute data (`MADISHF`), never counts. US stations: type 3 =
+routine, 4 = SPECI. Non-US: IEM's 3/4 split is arbitrary, routine is decided by the station's
+scheduled minutes (e.g. RKSI :00/:30, EGLC :20/:50).
+
+**Consequence for modelling:** the label is the bucket the market actually resolved to; the METAR
+value is used where it agrees, and for intraday running max (nowcasting). The current regime is
+reproduced exactly, so live trading logic can rely on it.
