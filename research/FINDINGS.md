@@ -161,3 +161,22 @@ It splits into two very different things:
 late in the day. The market price vs the empirical probability that the max still rises given
 local hour, current max and recent trend. This matches what the profitable wallet
 HighTempTation does (NO at 0.90–0.99 on the target day).
+
+## 10. Intraday nowcast from observations only loses to the market (step 3c) — `research/nowcast_model.py`
+
+State at local hour T (11–19 h) from METAR already *published* by T (city AWC delay + 1 min):
+running max M, latest value, 2-h trend, gap M − latest; target = further rise k = V − M.
+Walk-forward logistic model of P(k ≥ j), j = 1..20 (°F needs large j: at 11 h a rise ≥ 5 °F
+happens on 61 % of days, ≥ 10 °F on 20 %). 110,935 states, 508,076 live-bucket snapshots.
+
+* The model is **well calibrated** (e.g. predicted 0.148 → realised 0.159, 0.705 → 0.702), but the
+  market is calibrated **and sharper**: Brier on live buckets 0.0781 (model) vs **0.0563** (market);
+  worse at every hour (17 h: 0.0219 vs 0.0147). The market knows the afternoon forecast and
+  faster observations; history-of-the-day alone cannot match it.
+* Trading on disagreements (|model − market| > 3/5/10 pp): −3 % to −12 % ROI everywhere.
+* "Certainty harvesting" (model ≤ 3 %, market ≥ 6 %), NO at last + 1¢: 7,615 bets, ROI +1.8 % —
+  the YES still won 12–20 % of the time (market was closer); not robust to execution.
+
+**Conclusion:** observations alone give no edge. The only untested route is adding the NWP
+forecast of the rest of the day (Single Runs hourly) to this intraday model, and combining
+it with the market price (log-pool) rather than betting against the market.
