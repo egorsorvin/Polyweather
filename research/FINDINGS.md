@@ -202,3 +202,40 @@ since the max. LightGBM multiclass over the further rise, walk-forward by month,
 observation + weather nowcast all fail to beat the market after realistic execution.
 Remaining untested: NWP forecasts (Single Runs) for D−1 and for the rest of the day.
 A definitive execution test needs order-book snapshots (what was actually on offer at T).
+
+## 12. Fast observation feed beats the market — small but real (step 3e, US) — `research/fast_feed_test.py`, `fast_feed_sim.py`
+
+US stations (11), °F markets. Fast feeds: 1-minute ASOS (IEM archive) and MADIS 5-minute.
+* The 1-min feed shows a bucket-killing value a median **51 min before** the routine METAR that
+  settles it (US routine METAR is hourly, at :51). The market prices the kill a median **33 min
+  after** the 1-min signal (25 % within 8 min; 16 % before the signal). In the US most traders
+  apparently wait for METAR.
+* False alarms: 1-min touched hi+1 but the bucket never died on 10 % of signals (5-min: 6.5 %);
+  among signals where the market still priced YES ≥ 0.05 it is ~27 %.
+
+**Honest simulation** (signal → feed latency L → buy NO at real taker VWAP in the next 10 min,
+false alarms included, fees, t clustered by city-day):
+
+| feed | L | bets | ROI | t (clustered) |
+|---|---|---|---|---|
+| 1-min | 1 min | 1,971 | +5.0 % | 3.9 |
+| 1-min | 3 min | 2,035 | +4.2 % | 3.6 |
+| 1-min | 5 min | 2,026 | +3.3 % | 2.6 |
+| 1-min | 10 min | 1,960 | +2.9 % | 2.2 |
+| 1-min | 15 min | 1,918 | +1.3 % | 1.0 |
+| 5-min | 1 min | 2,406 | +4.6 % | 4.5 |
+| 5-min | 5 min | 2,201 | +1.4 % | 1.1 |
+| 5-min | 10 min | 2,036 | −1.1 % | −0.9 |
+
+Edge decays with latency exactly as the mechanism predicts. Since Apr 2026, 1-min at L = 3 min:
+ROI +3.3 % (t 2.7). Mostly positive months; NYC, Seattle, Atlanta, Miami, Chicago carry it;
+LA, Houston, Denver ≈ 0 or negative.
+
+**Capacity is the problem:** taking 100 % of the taker NO volume in the 10-min window (i.e. being
+the one who buys instead of the others), since Apr 2026: ≈ **$1.1–1.5k / month** for the US
+(1-min feed, L 1–3 min), about half of it NYC. Real-time 1-min data needs a live source
+(e.g. wethr.net reports ~2.5 min median latency for 1-min data, paid).
+
+Next: international fast feeds (JMA AMeDAS, NEA Singapore, KMA, Météo-France, KNMI/FMI, HKO),
+maker-side execution (resting NO bids ahead of the signal) and order-book logging to size the
+real liquidity.
