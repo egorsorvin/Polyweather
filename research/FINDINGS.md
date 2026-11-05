@@ -126,3 +126,38 @@ its upper edge. 67,608 dead buckets in 12,072 events (resolver-matched events on
 
 Open questions before calling this an edge: real AWC publication delay per station; who captures
 the pie (a few bots?); whether the biggest pie events are genuine (stale orders) or data artefacts.
+
+## 9. Step 3b — latency, who takes the pie, speed vs disbelief
+
+**AWC publication delay** (obs → AWC receipt, routine METAR, 7 days, `awc_latency.csv`): median
+5.1 min, p90 8.4. Fast: Jeddah 0.4, Singapore/Tel Aviv 1.0, Helsinki 1.4, Paris/Amsterdam 2.4,
+US ≈3.1–3.6. Medium: London/Seoul/Wellington/Madrid 4.3–4.5, China 5.5–6.4, Moscow 6.2.
+Slow: Istanbul/Tokyo/Toronto/Kuala Lumpur ≈8, Ankara 14, Mexico City 15, Lagos 30.
+Since the market reprices surprised dead buckets ~1.5 min after observation, in most cities fast
+traders use feeds that beat AWC.
+
+**SPECI heuristic check:** our scheduled-minute rule agrees with AWC `metarType` on 99.4 % of
+12,864 overlapping reports (disagreements mainly MMMX, UUWW).
+
+**Reachable pie for a bot reading AWC** (trades after obs + city AWC delay + 1 min):
+$123k total, ~$13.8k / month since Apr 2026. Spread over 3,932 wallets (top-1 4 %, top-20 29 %).
+It splits into two very different things:
+
+| part | trades | profit | events | median NO price |
+|---|---|---|---|---|
+| speed, < 15 min after obs | 3,983 | $37k | 577 | 0.94 |
+| 15–60 min | 5,997 | $27k | 332 | 0.94 |
+| **disbelief, > 60 min after obs** | 9,465 | $59k | 214 | 0.91 |
+
+* **Speed pie** since Apr 2026 ≈ **$3.6k / month for everyone together** (median $17.5 per
+  event; Denver, Seoul, Tel Aviv lead). Not a business on its own for an AWC-reading bot.
+* **Disbelief pie:** the day max came from a single +1 °C blip (e.g. Istanbul 2026-10-21: 22 °C at
+  09:20Z, then 20, 20, 20), and for hours many wallets kept buying NO at ~0.5 as if the blip
+  would not count. It did count. Mostly WU/NOAA-regime events, where the source could drop
+  reports; under the explicit current AWC rule a routine blip counts. Potential edge from reading
+  the rules better than the crowd, but rare, lumpy and exposed to oracle/correction risk.
+
+**Next (hypothesis C2):** not strictly dead but *almost dead* buckets — above the current max
+late in the day. The market price vs the empirical probability that the max still rises given
+local hour, current max and recent trend. This matches what the profitable wallet
+HighTempTation does (NO at 0.90–0.99 on the target day).
