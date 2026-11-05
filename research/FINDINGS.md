@@ -239,3 +239,19 @@ the one who buys instead of the others), since Apr 2026: ≈ **$1.1–1.5k / mon
 Next: international fast feeds (JMA AMeDAS, NEA Singapore, KMA, Météo-France, KNMI/FMI, HKO),
 maker-side execution (resting NO bids ahead of the signal) and order-book logging to size the
 real liquidity.
+
+## 13. Fast feeds outside the US: Tokyo and Singapore (step 3f) — `research/fetch_fast_intl.py`, `fast_feed_intl_sim.py`
+
+Live latency measured 2026-11-05 (`live_latency.log`): **JMA AMeDAS** publishes each 10-min value
+~7.6 min after the interval end (value 7.6–17 min old when seen); **NEA Singapore** publishes
+1-min values in 5-min batches, 3.3–8 min old when seen.
+
+* **Tokyo (JMA Haneda, 10-min): no edge.** The fast feed is a median 0 min ahead of the killing
+  METAR (METAR is half-hourly, JMA 10-min — same moments), and the market prices surprised kills
+  a median 3.3 min after the signal. Only an unrealistic 1-min latency shows +3.5 %; at ≥ 5 min ≈ 0.
+* **Singapore (NEA Changi, 1-min): no significant edge.** The feed leads the killing METAR by a
+  median 15 min and the market is slow (median 29 min after the signal), but with false alarms and
+  thin books the NO strategy returns ≈ +1–2 % (t < 1) on ~300 bets, ~$50k of total volume.
+
+So far the fast-feed edge exists only in **US °F markets**, where routine METAR is hourly and the
+crowd waits for it (§12): +3–5 %, t ≈ 3.5, capacity ≈ $1–1.5k / month.
