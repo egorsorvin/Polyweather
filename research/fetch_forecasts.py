@@ -302,13 +302,15 @@ def fetch_single(args):
         run_s = run.strftime("%Y-%m-%dT%H:%M")
         avail = [m for m in models if run_s[:10] >= SINGLE_FIRST_RUN.get(m, "2000-01-01")]
         n_rows = n_skipped = 0
+        missing = set()   # models whose run does not exist (same for every city): stop asking
         for st in stations:
             key = f"{st['city']}|{run_s}"
             if key in done or not avail:
                 n_skipped += 1
                 continue
             rows = []
-            groups = [avail]
+            want = [m for m in avail if m not in missing]
+            groups = [want] if want else []
             while groups:
                 grp = groups.pop(0)
                 d = call(url, {"latitude": st["lat"], "longitude": st["lon"], "timezone": "GMT",
@@ -317,6 +319,9 @@ def fetch_single(args):
                 if d.get("error"):
                     if len(grp) > 1:
                         groups.extend([m] for m in grp)      # find the model that fails
+                    elif "not available" in str(d.get("reason", "")):
+                        missing.add(grp[0])
+                        print(f"  {grp[0]} {run_s}: run not available, skipping it for all cities")
                     else:
                         print(f"  {st['city']} {grp[0]} {run_s}: {d.get('reason')}")
                     continue
