@@ -95,3 +95,34 @@ Setup: on the target day at local 06/09/11/12/13 h, take the event's favourite b
 
 **Conclusion:** no price-only edge here either. The interesting signal is the post-T price
 move itself: prices react to information during the day → that is hypothesis C (nowcasting).
+
+## 8. Intraday "dead bucket" reaction (step 3, first pass) — `research/nowcast_dead_buckets.py`
+
+A bucket is dead once the running daily max (event's own rule regime, resolver rounding) exceeds
+its upper edge. 67,608 dead buckets in 12,072 events (resolver-matched events only).
+
+* **Mostly anticipated.** Median YES price just before the killing report: 0.002; only 14.6 % of
+  dead buckets still had YES ≥ 0.05. $10.2M of NO ≤ 0.98 was bought in the hour *before* the
+  killing report (forecasts + faster feeds).
+* **When surprised, the market reprices within ~1.5 min of the observation time** (median; 75 %
+  within 3 min, 90 % within 5.3 min). AWC METAR is published a few minutes after observation, so
+  in most cities the fast traders use feeds faster than METAR.
+* **The pie** = profit of takers who still bought dead NO ≤ 0.98 *after* obs + delay
+  (fees deducted), Feb 2025 – Nov 2026, all cities:
+
+  | delay after obs | profit | spent |
+  |---|---|---|
+  | 2 min | $331k | $3.26M |
+  | 5 min | $136k | $1.23M |
+  | 10 min | $98k | $0.81M |
+  | 20 min | $80k | $0.60M |
+
+  Since Apr 2026: ≈ $15.8k / month at 5 min, $11.9k / month at 10 min, shared by all competitors.
+  Lumpy: at 5 min the top 20 events hold 44 % of it, median event with any pie ≈ $20.
+* Slowest repricing (median minutes to YES ≤ 0.02): Denver 11.4, Lagos 10.8, Jakarta 5.3,
+  Kuala Lumpur 5.0, Milan 4.7, Madrid 4.2. Largest 5-min pie: Seoul, Shenzhen, Istanbul, Denver,
+  Shanghai, NYC, Kuala Lumpur, Lagos, Moscow.
+* By local hour, the pie sits at 08–16 h (peak 13 h) plus around midnight (warm-night openings).
+
+Open questions before calling this an edge: real AWC publication delay per station; who captures
+the pie (a few bots?); whether the biggest pie events are genuine (stale orders) or data artefacts.
