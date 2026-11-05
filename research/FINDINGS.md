@@ -180,3 +180,25 @@ happens on 61 % of days, ≥ 10 °F on 20 %). 110,935 states, 508,076 live-bucke
 **Conclusion:** observations alone give no edge. The only untested route is adding the NWP
 forecast of the rest of the day (Single Runs hourly) to this intraday model, and combining
 it with the market price (log-pool) rather than betting against the market.
+
+## 11. Weather features from METAR + boosting, and market blend (step 3d) — `research/nowcast_gbm.py`
+
+Added from each published report: cloud cover / ceiling, wind dir & speed / gust, dewpoint
+depression, pressure and 3-h change, rain / thunder / shower / fog, plus day amplitude and hours
+since the max. LightGBM multiclass over the further rise, walk-forward by month, city categorical.
+
+* Alone the model is still clearly worse than the market: Brier 0.0774 vs 0.0563 (temperature-only
+  logistic: 0.0781). Weather features help only marginally. Top features: hour, city, 3-h trend,
+  gap to max, season, pressure, day amplitude, 3-h pressure change.
+* **Market + model logit blend** (walk-forward): Brier 0.05561 vs market 0.05579 — the model adds a
+  sliver of information (weights: market 0.94, model 0.14).
+* Trading the blend's disagreements looks profitable at "last trade + 1¢" (+3 … +9 %, t up to 7),
+  but **with real taker prices in the next 30 min it is −1 … −2 %**: takers paid ~5¢ above the last
+  trade, i.e. the price had already moved where the blend pointed. The blend predicts the *next
+  price move*, but the stale quotes are taken first by faster players. The apparent edge is a
+  stale-price artefact.
+
+**Status after steps 1–3d:** price-only, dead-bucket speed, observation-only nowcast and
+observation + weather nowcast all fail to beat the market after realistic execution.
+Remaining untested: NWP forecasts (Single Runs) for D−1 and for the rest of the day.
+A definitive execution test needs order-book snapshots (what was actually on offer at T).
