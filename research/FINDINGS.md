@@ -255,3 +255,24 @@ Live latency measured 2026-11-05 (`live_latency.log`): **JMA AMeDAS** publishes 
 
 So far the fast-feed edge exists only in **US °F markets**, where routine METAR is hourly and the
 crowd waits for it (§12): +3–5 %, t ≈ 3.5, capacity ≈ $1–1.5k / month.
+
+## 14. Day-ahead NWP model vs the market (step 4, B0/B1) — `research/forecast_model.py`
+
+Decision at local D−1 12:00; only runs published by then (init + 8 h); Single Runs Apr 3 – Oct 13
+2026, 9,045 events, 51 cities; per model the max of hourly 2 m temperature over local day D.
+Raw MAE vs settlement (market unit): ICON 1.58, GEM 1.67, UKMO 1.72, ECMWF 1.92, Météo-France 1.95,
+GFS 2.03, JMA 2.69.
+
+| on the same 61,724 buckets (7,497 events) | Brier | log loss |
+|---|---|---|
+| **market** (last trade ≤ 3 h) | **0.0757** | **0.241** |
+| B1 EMOS per city, rolling 45 d (ridge mean over 6 models, CRPS-fitted spread) | 0.0814 | 0.267 |
+| B0 ICON + rolling station bias | 0.0866 | 0.286 |
+
+* EMOS: MAE 1.11, CRPS 0.81, exact-integer hit 33 % (ICON+bias: 1.37 / 1.00 / 28 %).
+* EMOS is ~7.5 % worse than the market in Brier — far closer than the intraday observation models
+  (~38 % worse). Walk-forward logit blend market + EMOS: 0.07759 vs market 0.07773 (weights 0.89 / 0.16).
+* The market beats EMOS in almost every city (exceptions with few events: Shenzhen, Lagos).
+
+Next (B2): boosting with recent model errors and current conditions from METAR, then forecast
+radiation / cloud / wind / dew point for D (needs an extra Single Runs download).
