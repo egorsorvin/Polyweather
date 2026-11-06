@@ -119,6 +119,15 @@ ML-воркшоп / Datasets & Benchmarks / журнал по прогнозир
 * Gneiting et al. 2005 (EMOS), Rasp & Lerch 2018 (DRN), EUPPBench (Demaeyer et al. 2023),
   Höhlein et al. 2023 — постпроцессинг.
 * Snowberg & Wolfers 2010 — favourite–longshot bias.
+* **Akey, Grégoire, Harvie & Martineau (2026)**, «Who wins and who loses in prediction markets?
+  Evidence from Polymarket», SSRN 6443103 / CEPR DP 21615: 588 млн сделок; по пересказам ~30 %
+  пользователей в плюсе, верхний 1 % забирает ~76.5 % прибыли; на погоде шансы чуть выше среднего.
+  Датасет: Grégoire (2026), «Polymarket users» (v1.3) — разметка пользователей.
+* **Gómez-Cram, Guo, Jensen & Kung (2026)**, «Prediction market accuracy: Crowd wisdom or informed
+  minority?», SSRN 6617059: точность Polymarket создаёт ~3.5 % аккаунтов (маркет-мейкеры и умные
+  тейкеры), остальные её оплачивают. **Идея для нас:** проверить это на погодных рынках по
+  кошелькам в наших лентах сделок — кто двигает цену после METAR / прогонов, кто зарабатывает
+  (дополнение к A и B). Обе работы — читать в оригинале (пока известны по пересказам).
 * Open-source проекты с бэктестами (anaborne, k1hbles, isotherm, deadBracketBot) — практический контекст.
 
 Отличие нашей работы: масштаб (53 города, 12.8 тыс. событий), точный таргет по правилам,
