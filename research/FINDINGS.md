@@ -312,6 +312,7 @@ clustered by city-day): margin 10 % → 23,387 bets, ROI +3.2 %, t 3.1, ≈ $4.9
 
 **Caveats:** exploratory — many variants and slices were tried (multiple testing); entry prices
 are other takers' fills, not the real book; 06z/18z runs and forecast radiation/cloud/wind are
-still missing. Not a confirmed edge. Development data: up to 2026-10-13. **Everything from
-2026-10-14 on is reserved as the out-of-sample check** for the final model (not to be used for
-tuning).
+still missing. Not a confirmed edge. These numbers are a snapshot of the current methodology on
+Apr–Oct 2026 Single Runs; they will be redone once the missing data (06z/18z runs, forecast
+weather variables, Previous Runs history) is in. The train / final-test split is decided after
+data collection.
