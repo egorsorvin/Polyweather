@@ -4,9 +4,32 @@
 ML-воркшоп / Datasets & Benchmarks / журнал по прогнозированию. Этот файл фиксирует идеи,
 вклад, нужные эксперименты и площадки, чтобы исследование сразу шло с прицелом на статью.
 
-Рабочее название:
+## 0. Выбранное направление (6 ноября 2026)
 
-> **Can machine learning beat a prediction market on the weather?
+| | Статья | Роль |
+|---|---|---|
+| **A — основная (ML)** | **бенчмарк + своя модель**: датасет с точным таргетом, бейзлайны (сырые модели, AI-ансамбли, NBM, EMOS, DRN, бустинг), своя потоковая вероятностная модель **SettleCast** против AI/NWP-моделей и рынка | в профессиональной области автора (ML) |
+| B — побочная | латентность наблюдений и ценообразование (минутные данные против часового METAR) | чтобы результат не ушёл в стол; позже, коротко |
+| — | ловушки бэктестов | раздел внутри A, не отдельная статья |
+
+Архитектура модели: `paper/MODEL_DESIGN.md`. Площадки для A: **NeurIPS Evaluations & Datasets**
+(бывший Datasets & Benchmarks; принимает погодные бенчмарки, например ChaosBench в 2024), **TMLR**.
+Для B: IJF, ICAIF, arXiv q-fin.
+
+Данные Polymarket: сделки публичны в блокчейне (Polygon); есть прецеденты открытых датасетов
+(Jon-Becker, SII-WANGZJ). Перед публикацией прочитать условия Polymarket; при необходимости
+пересобрать сделки прямо из блокчейна (Dune / Goldsky / HyperSync).
+
+Самая близкая работа: Alexander W. Crosier, arXiv 2609.23969 (21.09.2026, q-fin General Finance,
+не рецензирована; цитирований на 06.11.2026 не найдено). Qiu & Qiu (arXiv 2610.13593) — два
+автора с фамилией Qiu, 5-страничная работа подросткового трека ICDM 2026.
+
+Рабочие названия:
+
+> **A: SettleCast — streaming probabilistic forecasts of settlement temperatures, benchmarked
+> against AI weather models and real-money prediction markets**
+>
+> **B: Can machine learning beat a prediction market on the weather?
 > Evidence from 12,800 Polymarket temperature markets**
 
 ---
