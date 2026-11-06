@@ -17,6 +17,10 @@ Modes
   probe     one tiny request per model on both APIs -> prints what is available.
             Run this first and send me the output.
   probe-start  binary-search the earliest available Single Run per model.
+  extra     additional datasets, each in its own folder (see PRESETS):
+              --preset single-extras    radiation, cloud, wind, dew point (ICON, ECMWF, AIFS), 00z/12z
+              --preset single-0618      temperature of the 06z/18z runs
+              --preset previous-extras  same weather variables, 2024 ->, ~24 h / ~48 h ahead
   previous  Previous Runs API: for each hour, the value forecast N days earlier
             (temperature_2m, _previous_day1, _previous_day2). Cheap: ~1 request
             per city per month. Used for model training (long history).
@@ -76,6 +80,23 @@ SINGLE_FIRST_RUN = {
 }
 PREVIOUS_VARS = ["temperature_2m", "temperature_2m_previous_day1", "temperature_2m_previous_day2"]
 RUN_HOURS = (0, 12)
+
+# ─── extra datasets (presets for the `extra` mode) ──────────────────────────────
+# Each preset has its own output folder and progress file, so it never interferes with
+# the main temperature download. Output: long format time rows (one row per value).
+EXTRA_VARS = ["shortwave_radiation", "cloud_cover", "wind_speed_10m", "wind_direction_10m", "dew_point_2m"]
+PRESETS = {
+    # forecast weather for day D from the main 00z/12z runs (radiation, clouds, wind, humidity)
+    "single-extras": {"api": "single", "models": ["icon_global", "ecmwf_ifs025", "ecmwf_aifs025_single"],
+                      "vars": EXTRA_VARS, "hours": (0, 12)},
+    # the 06z/18z runs (temperature), for decision times late on D-1 / early on D
+    "single-0618": {"api": "single", "models": ["icon_global", "gfs_global", "ecmwf_ifs025",
+                                                 "ecmwf_aifs025_single", "meteofrance_arpege_world"],
+                    "vars": ["temperature_2m"], "hours": (6, 18)},
+    # long history (2024 ->) of the same weather variables, ~24 h and ~48 h ahead, for training
+    "previous-extras": {"api": "previous", "models": ["icon_seamless", "ecmwf_ifs025"],
+                        "vars": [f"{v}_previous_day{d}" for v in EXTRA_VARS for d in (1, 2)]},
+}
 
 HOSTS = {
     "previous": "previous-runs-api.open-meteo.com",
@@ -406,10 +427,97 @@ def fetch_single(args):
         else:
             print(f"run {run_s}: {n_rows} values" + (f" ({n_skipped} cities already done)" if n_skipped else ""))
 
+# ─── extra datasets ───────────────────────────────────────────────────────────
+
+def fetch_extra(args):
+    """Download a PRESET (see PRESETS) into data/forecasts/<preset>/<city>.csv.gz.
+    Single-runs presets: oldest runs first (they expire); one request per (city, run) with all
+    models and variables. Previous-runs presets: one request per (city, month)."""
+    pr = PRESETS[args.preset]
+    tag, api = args.preset, pr["api"]
+    models, variables = args.models or pr["models"], pr["vars"]
+    (OUT / tag).mkdir(parents=True, exist_ok=True)
+    done = done_set(tag)
+    stations = load_stations(args.top)
+    url = api_url(api, args.apikey)
+    header = ["run_utc", "time_utc", "model", "var", "value"] if api == "single" else ["time_utc", "model", "var", "value"]
+
+    def rows_from(h, grp, run_s=None):
+        out, empty = [], []
+        for m in grp:
+            got = False
+            for v in variables:
+                key = v if len(grp) == 1 else f"{v}_{m}"
+                for t, x in zip(h["time"], h.get(key, [])):
+                    if x is not None:
+                        out.append(([run_s] if run_s else []) + [t, m, v, x])
+                        got = True
+            if not got:
+                empty.append(m)
+        return out, empty
+
+    def get_all(params, run_s=None):
+        rows, groups = [], [models]
+        while groups:
+            grp = groups.pop(0)
+            d = call(url, {**params, "models": ",".join(grp)}, args.apikey, args.interval)
+            if d.get("error"):
+                if len(grp) > 1:
+                    groups.extend([m] for m in grp)
+                else:
+                    print(f"    {grp[0]}: {d.get('reason')}")
+                continue
+            r, empty = rows_from(d["hourly"], grp, run_s)
+            rows += r
+            if len(grp) > 1:
+                groups.extend([m] for m in empty)
+        return rows
+
+    if api == "single":
+        now = datetime.now(timezone.utc)
+        d0 = date.fromisoformat(args.start if args.start != "2024-01-01" else "2026-04-02")
+        runs = []
+        d = d0
+        while d <= now.date():
+            for hh in pr["hours"]:
+                run = datetime(d.year, d.month, d.day, hh, tzinfo=timezone.utc)
+                if run < now - timedelta(hours=12):
+                    runs.append(run.strftime("%Y-%m-%dT%H:%M"))
+            d += timedelta(days=1)
+        print(f"[{tag}] {len(stations)} stations x {len(runs)} runs, models {models}, vars {variables}")
+        for run_s in runs:
+            n = skipped = 0
+            for st in stations:
+                key = f"{st['city']}|{run_s}"
+                if key in done:
+                    skipped += 1
+                    continue
+                rows = get_all({"latitude": st["lat"], "longitude": st["lon"], "timezone": "GMT",
+                                "hourly": ",".join(variables), "run": run_s, "forecast_days": 3}, run_s)
+                append_rows(OUT / tag / f"{st['city']}.csv.gz", header, rows)
+                mark_done(tag, key)
+                n += len(rows)
+            print(f"run {run_s}: " + ("already downloaded, skipped" if skipped == len(stations) else f"{n} values"))
+    else:
+        end = date.today() - timedelta(days=1)
+        print(f"[{tag}] {len(stations)} stations, months from {args.start}, models {models}")
+        for st in stations:
+            for lo, hi in month_chunks(date.fromisoformat(args.start), end):
+                key = f"{st['city']}|{lo}"
+                if key in done:
+                    continue
+                rows = get_all({"latitude": st["lat"], "longitude": st["lon"], "timezone": "GMT",
+                                "hourly": ",".join(variables), "start_date": lo.isoformat(),
+                                "end_date": hi.isoformat()})
+                append_rows(OUT / tag / f"{st['city']}.csv.gz", header, rows)
+                mark_done(tag, key)
+                print(f"{st['city']:14s} {lo}: {len(rows)} values")
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["probe", "probe-start", "previous", "single"])
+    ap.add_argument("mode", choices=["probe", "probe-start", "previous", "single", "extra"])
+    ap.add_argument("--preset", choices=sorted(PRESETS), help="extra mode: which dataset")
     ap.add_argument("--start", default="2024-01-01")
     ap.add_argument("--top", type=int, default=0, help="only the N most liquid cities (0 = all)")
     ap.add_argument("--models", nargs="*", help="override model list")
@@ -419,8 +527,10 @@ def main():
                     help="single mode: re-request runs/models that were unavailable before")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
+    if args.mode == "extra" and not args.preset:
+        ap.error("extra mode needs --preset " + "|".join(sorted(PRESETS)))
     {"probe": probe, "probe-start": probe_start, "previous": fetch_previous,
-     "single": fetch_single}[args.mode](args)
+     "single": fetch_single, "extra": fetch_extra}[args.mode](args)
 
 
 if __name__ == "__main__":
