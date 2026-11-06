@@ -4,7 +4,7 @@ Polymarket order-book logger for temperature markets.
 
 Records every order-book event (full snapshots `book`, level updates `price_change`, trades
 `last_trade_price`, `tick_size_change`, `market_resolved`) of the YES token of all OPEN
-"highest / lowest temperature" markets (the NO book is its mirror), from the public WebSocket:
+"highest temperature" markets (optionally also "lowest") (the NO book is its mirror), from the public WebSocket:
 
     wss://ws-subscriptions-clob.polymarket.com/ws/market
 
@@ -29,7 +29,8 @@ Design:
 
 Usage:
     pip install websockets requests
-    python logger/book_logger.py --out data/orderbook               # all cities (~0.6 GB/day)
+    python logger/book_logger.py --out data/orderbook               # all cities, "highest" (~0.5 GB/day)
+    python logger/book_logger.py --out data/orderbook --kinds highest,lowest   # + "lowest" (~0.6 GB/day)
     python logger/book_logger.py --out data/orderbook --cities us    # 11 US cities only
 """
 import argparse
@@ -59,6 +60,7 @@ log = logging.getLogger("book_logger")
 # ─── discovery ────────────────────────────────────────────────────────────────
 
 CITIES: set = set()          # empty = all cities; filled from --cities
+KINDS: set = {"highest"}     # market kinds to record; --kinds highest,lowest to add "lowest"
 
 
 def city_of(slug: str) -> str:
@@ -82,6 +84,8 @@ def discover() -> dict:
             page = r.json()
             for e in page:
                 if "temperature" not in e.get("slug", ""):
+                    continue
+                if e.get("slug", "").split("-", 1)[0] not in KINDS:
                     continue
                 if CITIES and city_of(e.get("slug", "")) not in CITIES:
                     continue
@@ -341,10 +345,13 @@ async def main_async(out: Path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="data/orderbook")
+    ap.add_argument("--kinds", default="highest",
+                    help="market kinds: highest (default) or highest,lowest (lowest: ~7%% of volume)")
     ap.add_argument("--cities", default="", help="comma-separated city slugs, e.g. us (preset) or "
                     "nyc,miami,london; default: all cities")
     args = ap.parse_args()
-    global CITIES
+    global CITIES, KINDS
+    KINDS = {k.strip() for k in args.kinds.split(",") if k.strip()}
     presets = {"us": "nyc,miami,atlanta,dallas,seattle,chicago,los-angeles,denver,austin,houston,san-francisco"}
     CITIES = {c.strip() for c in presets.get(args.cities, args.cities).split(",") if c.strip()}
     out = Path(args.out)
@@ -352,7 +359,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
                         handlers=[logging.StreamHandler(), logging.FileHandler(out / "logger.log")])
     log.info(f"book logger starting, pid {os.getpid()}, out={out.resolve()}, "
-             f"cities={','.join(sorted(CITIES)) or 'all'}")
+             f"kinds={','.join(sorted(KINDS))}, cities={','.join(sorted(CITIES)) or 'all'}")
     asyncio.run(main_async(out))
 
 

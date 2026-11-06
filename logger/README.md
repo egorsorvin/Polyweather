@@ -1,7 +1,7 @@
 # Order-book logger
 
-Records the full order book of every open Polymarket temperature market (YES token; NO is its
-mirror) from the public market WebSocket, so strategies can be backtested against the prices and
+Records the full order book of every open Polymarket "highest temperature" market (YES token; NO is
+its mirror; add `--kinds highest,lowest` for the small "lowest" markets) from the public market WebSocket, so strategies can be backtested against the prices and
 depth that were really on offer — not against the last trade.
 
 * `book_logger.py` — the recorder (runs 24/7 on a server)
@@ -57,7 +57,7 @@ Event lines (see `Writer` in `book_logger.py`):
 level change (size 0 removes the level), `["t", ...]` trade, `["k", ...]` tick size,
 `["r", ...]` resolution.
 
-Size: roughly 0.5–1 GB per day for ~3,000 markets. Keep at least a few weeks; back the folder up
+Size: about 0.5 GB per day for ~1,600 "highest" markets (0.6 GB with "lowest"). Keep at least a few weeks; back the folder up
 off the server (e.g. `rclone sync data/orderbook remote:polyweather-orderbook` from cron) so the
 record is not lost with the machine.
 
