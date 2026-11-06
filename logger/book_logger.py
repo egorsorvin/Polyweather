@@ -29,7 +29,8 @@ Design:
 
 Usage:
     pip install websockets requests
-    python logger/book_logger.py --out data/orderbook
+    python logger/book_logger.py --out data/orderbook               # all cities (~0.6 GB/day)
+    python logger/book_logger.py --out data/orderbook --cities us    # 11 US cities only
 """
 import argparse
 import asyncio
@@ -57,8 +58,17 @@ log = logging.getLogger("book_logger")
 
 # ─── discovery ────────────────────────────────────────────────────────────────
 
+CITIES: set = set()          # empty = all cities; filled from --cities
+
+
+def city_of(slug: str) -> str:
+    """'highest-temperature-in-nyc-on-november-7-2026' -> 'nyc'"""
+    s = slug.split("-temperature-in-", 1)[-1]
+    return s.split("-on-", 1)[0]
+
+
 def discover() -> dict:
-    """token_id -> market meta, for all open temperature markets."""
+    """token_id -> market meta, for all open temperature markets (optionally only CITIES)."""
     out = {}
     lo = date.today() - timedelta(days=1)
     for k in range(0, 6, 2):
@@ -72,6 +82,8 @@ def discover() -> dict:
             page = r.json()
             for e in page:
                 if "temperature" not in e.get("slug", ""):
+                    continue
+                if CITIES and city_of(e.get("slug", "")) not in CITIES:
                     continue
                 for m in e.get("markets", []):
                     if m.get("closed"):
@@ -329,12 +341,18 @@ async def main_async(out: Path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="data/orderbook")
+    ap.add_argument("--cities", default="", help="comma-separated city slugs, e.g. us (preset) or "
+                    "nyc,miami,london; default: all cities")
     args = ap.parse_args()
+    global CITIES
+    presets = {"us": "nyc,miami,atlanta,dallas,seattle,chicago,los-angeles,denver,austin,houston,san-francisco"}
+    CITIES = {c.strip() for c in presets.get(args.cities, args.cities).split(",") if c.strip()}
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
                         handlers=[logging.StreamHandler(), logging.FileHandler(out / "logger.log")])
-    log.info(f"book logger starting, pid {os.getpid()}, out={out.resolve()}")
+    log.info(f"book logger starting, pid {os.getpid()}, out={out.resolve()}, "
+             f"cities={','.join(sorted(CITIES)) or 'all'}")
     asyncio.run(main_async(out))
 
 
