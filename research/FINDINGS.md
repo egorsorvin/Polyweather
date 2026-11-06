@@ -316,3 +316,35 @@ still missing. Not a confirmed edge. These numbers are a snapshot of the current
 Apr–Oct 2026 Single Runs; they will be redone once the missing data (06z/18z runs, forecast
 weather variables, Previous Runs history) is in. The train / final-test split is decided after
 data collection.
+
+---
+
+## Appendix A. Audit of the old bot (Nov 2026, before the recon)
+
+Methodology: optimised bucket accuracy / MAE instead of calibrated probabilities; probabilities
+built by shifting raw ICON members to a LightGBM point forecast (over-confident, false edges);
+train/prod mismatch (`max(hourly temperature_2m_previous_day1)` vs daily `temperature_2m_max` of
+the latest run); `previous_day1` look-ahead for peak hours; KNMI/DMI outside Europe = ECMWF
+duplicates; LightGBM ≈ rolling-bias-corrected multi-model mean; max-edge bucket selection =
+winner's curse; hourly max biased low. Data: Tokyo on Narita coordinates (market resolves on
+Haneda RJTT); cities chosen by model accuracy, not market inefficiency. Execution: exits never
+sent (`sell_yes` unused), buys assumed filled, exit price from Gamma mid, 20 % stop-loss on thin
+binary books, "tomorrow" = UTC date + 1, weather.com key hard-coded (now `401 throttled`).
+
+## Appendix B. Data inventory and how to rebuild it
+
+| data | where | in git | rebuild |
+|---|---|---|---|
+| Polymarket events (12,990 "highest") | `data/raw/events.jsonl` | no | `python research/fetch_events.py --start 2024-01-01` (~5 min) |
+| trade tapes (29M trades) | `data/raw/trades/` | no | `python research/fetch_trades.py --workers 16` (~20 min) |
+| METAR, 52 stations + former KBKF / LFPG / RCTP | `data/raw/metar/` | no | `python research/fetch_metar.py`, then `--icao KBKF LFPG RCTP --start 2025-11-25` (~40 min) |
+| US 1-min ASOS | `data/raw/fast1min/` | no | downloaded by `research/fast_feed_test.py` (~10 min) |
+| JMA Haneda 10-min, NEA Changi 1-min | `data/raw/fast_intl/` | no | `python research/fetch_fast_intl.py` (~40 min) |
+| AWC live latency sample | `data/raw/analysis/awc_latency.csv` | no | snippet in §9 (aviationweather `metar?format=json&hours=168`) |
+| resolution stations | `data/stations.csv` | yes | `python research/build_stations.py` |
+| Open-Meteo forecasts | `data/forecasts/` | **yes** | **not rebuildable**: old Single Runs expire |
+| order book | server `data/orderbook/` | no | real-time only (`logger/`) |
+| analysis outputs | `data/raw/analysis/` | no | rerun the scripts named in each § |
+
+Raw Polymarket and METAR data are public and re-downloadable; forecasts are kept in git because
+they cannot be fetched again.
