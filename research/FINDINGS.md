@@ -276,3 +276,75 @@ GFS 2.03, JMA 2.69.
 
 Next (B2): boosting with recent model errors and current conditions from METAR, then forecast
 radiation / cloud / wind / dew point for D (needs an extra Single Runs download).
+
+## 15. B2: one as-of model for any moment D−1 12:00 … D 18:00 (step 4, B2 / B2.1) — `research/unified_model.py`
+
+225,418 hourly-ish states (every 2 h on D−1 from 12:00, hourly on D 00–18 local), 9,017 events,
+51 cities, Apr–Oct 2026. Features at t: per-model max for day D from the newest *published*
+00z/12z run, spread/min/max, run age; each model's recent day-ahead error at the station (1/3/7
+resolved days); METAR at t (latest T, cloud, ceiling, wind, gust, dewpoint depression, pressure,
+3-h change, rain/thunder/fog); inside D the running max and trend. LightGBM multiclass over the
+offset of V from a centre; values below the running max set to 0; walk-forward by month.
+
+* **B2 (first try):** badly over-confident (predicted 0.1 % → 1.6 % realised, 69 % → 44 %);
+  Brier 0.0997 vs market 0.0779. Causes: ~25 near-duplicate states per event, 25 classes, city
+  memorised as top feature, little history (gap 40 % in May → ~22 % by Aug–Oct).
+* **B2.1:** centre = multi-model mean + rolling station bias (45 d), bias / error spread as
+  features, city removed, strong regularisation, walk-forward temperature scaling of the
+  probabilities. Now **well calibrated** (0.148 → 0.152, 0.474 → 0.454).
+
+| decision band | n | Brier market | Brier B2.1 |
+|---|---|---|---|
+| D−1 12–23 | 339k | 0.0811 | 0.0878 |
+| D 00–05 | 336k | 0.0842 | 0.0924 |
+| D 06–11 | 324k | 0.0855 | 0.0953 |
+| D 12–18 | 261k | 0.0561 | 0.0803 |
+| all | 1.26M | 0.0779 | 0.0894 |
+
+At D−1 12:00 alone: 0.0863 vs 0.0805 (≈ EMOS in §14). Walk-forward logit blend: market weight
+0.96, model 0.10, Brier 0.07936 vs market 0.07938 (no gain).
+
+**Dynamic trading** (enter each bucket once at the first state with |p − market| > margin; entry
+= VWAP of other takers in the next 30 min; stake ≤ $100 and ≤ 10 % of that volume; fees; t
+clustered by city-day): margin 10 % → 23,387 bets, ROI +3.2 %, t 3.1, ≈ $4.9k on ≈ $154k turnover
+(~$900 / month at this sizing). Structure: NO side (+2.6 %, t 3.2), night/morning D 00–11
+(+5 %, t 2.3–2.6), entry price 0.5–0.8 (+6.0 %, t 5.1), positive in all 6 months, spread over cities.
+
+**Caveats:** exploratory — many variants and slices were tried (multiple testing); entry prices
+are other takers' fills, not the real book; 06z/18z runs and forecast radiation/cloud/wind are
+still missing. Not a confirmed edge. These numbers are a snapshot of the current methodology on
+Apr–Oct 2026 Single Runs; they will be redone once the missing data (06z/18z runs, forecast
+weather variables, Previous Runs history) is in. The train / final-test split is decided after
+data collection.
+
+---
+
+## Appendix A. Audit of the old bot (Nov 2026, before the recon)
+
+Methodology: optimised bucket accuracy / MAE instead of calibrated probabilities; probabilities
+built by shifting raw ICON members to a LightGBM point forecast (over-confident, false edges);
+train/prod mismatch (`max(hourly temperature_2m_previous_day1)` vs daily `temperature_2m_max` of
+the latest run); `previous_day1` look-ahead for peak hours; KNMI/DMI outside Europe = ECMWF
+duplicates; LightGBM ≈ rolling-bias-corrected multi-model mean; max-edge bucket selection =
+winner's curse; hourly max biased low. Data: Tokyo on Narita coordinates (market resolves on
+Haneda RJTT); cities chosen by model accuracy, not market inefficiency. Execution: exits never
+sent (`sell_yes` unused), buys assumed filled, exit price from Gamma mid, 20 % stop-loss on thin
+binary books, "tomorrow" = UTC date + 1, weather.com key hard-coded (now `401 throttled`).
+
+## Appendix B. Data inventory and how to rebuild it
+
+| data | where | in git | rebuild |
+|---|---|---|---|
+| Polymarket events (12,990 "highest") | `data/raw/events.jsonl` | no | `python research/fetch_events.py --start 2024-01-01` (~5 min) |
+| trade tapes (29M trades) | `data/raw/trades/` | no | `python research/fetch_trades.py --workers 16` (~20 min) |
+| METAR, 52 stations + former KBKF / LFPG / RCTP | `data/raw/metar/` | no | `python research/fetch_metar.py`, then `--icao KBKF LFPG RCTP --start 2025-11-25` (~40 min) |
+| US 1-min ASOS | `data/raw/fast1min/` | no | downloaded by `research/fast_feed_test.py` (~10 min) |
+| JMA Haneda 10-min, NEA Changi 1-min | `data/raw/fast_intl/` | no | `python research/fetch_fast_intl.py` (~40 min) |
+| AWC live latency sample | `data/raw/analysis/awc_latency.csv` | no | snippet in §9 (aviationweather `metar?format=json&hours=168`) |
+| resolution stations | `data/stations.csv` | yes | `python research/build_stations.py` |
+| Open-Meteo forecasts | `data/forecasts/` | **yes** | **not rebuildable**: old Single Runs expire |
+| order book | server `data/orderbook/` | no | real-time only (`logger/`) |
+| analysis outputs | `data/raw/analysis/` | no | rerun the scripts named in each § |
+
+Raw Polymarket and METAR data are public and re-downloadable; forecasts are kept in git because
+they cannot be fetched again.
