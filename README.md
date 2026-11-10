@@ -1,111 +1,123 @@
-# 🌤 PolyWeather
+# PolyWeather
 
-Multi-model ensemble postprocessing for daily maximum temperature forecasts at 10 globally distributed airport stations. Uses LightGBM regression with ensemble member shifting to produce calibrated bucket probability predictions.
+Research project on **Polymarket daily "highest temperature" markets**: can forecasts built from
+numerical / AI weather models and live observations beat the market price at the moment of
+trading — honestly, after fees, spreads and realistic execution?
 
-This repository contains the code and dataset for the NLP Course final project (Spring 2026).
+The project started as a trading bot (see [Legacy bot](#legacy-bot)). It was re-started in
+November 2026 as a research project: measure the market first, rebuild data and targets exactly
+by the settlement rules, and test every hypothesis with point-in-time data and real fill prices.
 
-## How It Works
+> Status (Nov 2026): **research phase, no live trading.** Docs are partly in Russian.
+
+---
+
+## Key results so far
+
+Full numbers and methods: [`research/FINDINGS.md`](research/FINDINGS.md) (§ numbers below).
+
+* **Data:** 12,990 Polymarket "highest temperature" events, 53 cities, Jan 2025 → Nov 2026;
+  29 M trades; resolution stations; METAR archive; point-in-time forecasts of 8 NWP / AI models
+  (Open-Meteo Single Runs, Apr 2026 →).
+* **Settlement rules changed three times** (Wunderground → NOAA timeseries → aviationweather METAR,
+  routine reports only, SPECI excluded). A resolver rebuilds the settlement value of every event
+  under its own regime and matches the actual outcomes: **100 %** (current AWC regime),
+  99.0 % (NOAA), 98.2 % (WU) (§6).
+* **The market is well calibrated** (~1 pp deviations; bucket prices sum to ≈ 1.00) (§4).
+  Price-only strategies — longshots, favourites — lose after fees (§7).
+* **Forecast models vs the market:** EMOS post-processing of 6–8 models is ~7.5 % worse in Brier
+  than the market at D−1 12:00 (§14); a unified as-of LightGBM model (forecasts + METAR + recent
+  model errors) is calibrated but ~15 % worse overall (§15). Intraday models from observations
+  lose to the market as well (§10–§11).
+* **The only confirmed edge is information latency:** in US cities routine METAR is hourly and the
+  market waits for it; 1-minute ASOS observations give **+3–5 % ROI (t ≈ 3.5, clustered by
+  city-day)**, decaying with delay, capacity ≈ $1–1.5k / month (upper bound) (§12). Tokyo and
+  Singapore show no significant edge (§13).
+* **Backtest pitfalls found on the way:** look-ahead in Open-Meteo `previous_day1`, the
+  stale-last-price artefact (+8.7 % on last trades vs −1.8 % on real fills, §11), rule-regime
+  changes, over-confidence of boosting on near-duplicate states (§15).
+
+---
+
+## Repository
 
 ```
-11 NWP Models (Previous Runs API)             ICON Ensemble (39 members)
-  ECMWF, ICON, GFS, JMA, GEM,                  raw probability distribution
-  UKMO, KNMI, DMI, CMA, MeteoFrance,                       │
-  NCEP GraphCast                                           │
-         │                                                 │
-         ▼                                                 │
-   LightGBM Regressor                                      │
-   (8,339 samples, 27 features)                            │
-   → calibrated T_max prediction                           │
-         │                                                 │
-         └─────────── shift ensemble mean ─────────────────┘
-                              │
-                              ▼
-              P(bucket) = shifted members in bucket / N
+research/        research scripts and documents
+  PLAN.md          current status + to-do list (start here)
+  FINDINGS.md      lab notebook: every experiment with numbers (§1–§15, appendices)
+  sota/            literature / open-source / wallet review (SOTA.md)
+  fetch_*.py       data collection (events, trades, METAR, forecasts, fast feeds)
+  resolver.py      settlement value per rule regime
+  *_model.py, *_test.py, *_sim.py   experiments referenced in FINDINGS
+logger/          Polymarket order-book recorder (WebSocket) + replay tool + systemd unit
+paper/           publication plan, model design (SettleCast), novelty review
+data/
+  stations.csv     resolution station per city (ICAO, coordinates, timezone, unit)
+  forecasts/       Open-Meteo forecasts (kept in git — old runs cannot be re-downloaded)
+  raw/             events, trades, METAR, analysis outputs (not in git, re-downloadable)
+bot.py, strategy.py, forecast.py, predictor.py, markets.py, executor.py, retrain.py, cities.py
+                 legacy bot (see below)
 ```
 
-## Quick Start
+Branch for this work: `claude/brave-hawking-jzbxx3`.
+
+---
+
+## Getting started
 
 ```bash
-git clone <repo-url>
-cd polyweather
-pip install -r requirements.txt
-
-# Collect data and train model from scratch
-python retrain.py --from-scratch
-
-# Or use the included pretrained model
-python bot.py --test-forecast
-
-# Single scan / continuous run
-python bot.py --once
-python bot.py --interval 60
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt
 ```
 
-## Repository Structure
+Rebuild the public market and observation data (not stored in git; see FINDINGS appendix B):
 
-| File | What it does |
-|------|-------------|
-| `cities.py` | City configs — coordinates, stations, timezones |
-| `forecast.py` | Ensemble fetch + LightGBM calibration |
-| `predictor.py` | LightGBM inference — fetches 11-model features, predicts T_max |
-| `markets.py` | Polymarket market scanner |
-| `strategy.py` | Edge detection, position sizing, exits |
-| `executor.py` | Order execution |
-| `bot.py` | Main scan loop |
-| `retrain.py` | Automated data collection + model retraining |
+```bash
+python research/fetch_events.py --start 2024-01-01
+python research/fetch_trades.py --workers 16
+python research/build_stations.py
+python research/fetch_metar.py
+python research/resolver.py
+python research/market_calibration.py
+```
 
-## Dataset
+Forecasts (free Open-Meteo tier, ~10k requests/day per IP, resumable; run on your own machine):
 
-The dataset is included in `data/`:
+```bash
+python research/fetch_forecasts.py single --start 2026-04-02
+python research/fetch_forecasts.py extra --preset single-extras
+python research/fetch_forecasts.py extra --preset single-0618
+python research/fetch_forecasts.py previous --start 2024-01-01
+python research/fetch_forecasts.py extra --preset previous-extras --start 2024-01-01
+```
 
-| File | Description | Rows |
-|------|-------------|------|
-| `data/model_forecasts_day1.csv` | 24-hour-ahead forecasts from 11 NWP models + 7 context variables | 8,340 |
-| `data/wu_historical.csv` | Daily T_max from Weather Underground (ground truth) | 11,138 |
-| `data/clim_normals_era5.csv` | ERA5 1991-2020 climatological normals per city/day | 3,660 |
-| `data/models/global_model_tuned.txt` | Trained LightGBM model (native format) | — |
-| `data/models/feature_cols.pkl` | Feature column list | — |
-| `data/models/best_params.json` | Optimal hyperparameters (Optuna, 80 trials) | — |
+Order-book logger (24/7 on a server; ~90 MB RAM, ~0.5 GB/day): see [`logger/README.md`](logger/README.md).
 
-**Coverage:** 10 airport stations, Feb 5, 2024 — May 18, 2026 (~28 months).
+---
 
-**Data collection:** Run `python retrain.py --from-scratch` to reproduce the dataset from public APIs.
+## Next steps
 
-## Model
+Tracked in [`research/PLAN.md`](research/PLAN.md). In short: finish the forecast download
+(forecast radiation / cloud / wind / dew point, 06z/18z runs, Previous Runs history), deploy the
+order-book logger, add AI ensembles (AIFS-ENS, AIGEFS, WeatherNext 2) and NBM as baselines,
+build the streaming model SettleCast ([`paper/MODEL_DESIGN.md`](paper/MODEL_DESIGN.md)), and only
+then decide on paper trading. Publication plan: [`paper/PUBLICATION_PLAN.md`](paper/PUBLICATION_PLAN.md).
 
-LightGBM regression trained on 27 features:
-- **NWP forecasts (11):** ECMWF IFS, GFS, ICON, JMA, GEM, MeteoFrance, UKMO, KNMI, DMI, CMA GRAPES, NCEP GraphCast
-- **Context (7):** Cloud cover, precipitation, radiation, humidity, wind speed, pressure, dew point (ECMWF IFS, 24h ahead)
-- **Seasonal (3):** doy_sin, doy_cos, city_id
-- **History (2):** WU T_max d-2 and d-3
-- **Ensemble stats (4):** mean, std, min, max across NWP models
+---
 
-**Hyperparameters** (Optuna tuned): 313 estimators, lr=0.029, max_depth=6, num_leaves=35.
+## Legacy bot
 
-**Honest walk-forward CV bucket accuracy: 37.9%** (1°C discretization).
+The original bot (`bot.py` and the modules next to it) trained LightGBM on Open-Meteo
+`previous_day1` forecasts and Wunderground maxima for 10 cities and paper-traded edges against
+Polymarket prices. An audit (FINDINGS appendix A) found methodological problems — wrong metric,
+look-ahead in the training data, over-confident probabilities, Narita instead of Haneda for Tokyo,
+exits never sent, fills assumed — so **its results and its pretrained model
+(`data/models/`, `data/model_forecasts_day1.csv`, `data/wu_historical.csv`) should not be relied on.**
+It is kept for reference only and will be replaced if a strategy passes the research phase.
 
-## Per-city Performance
+## Data sources and licences
 
-| City | Bucket Accuracy | MAE (°C) |
-|------|----------------|----------|
-| Wellington | 43.8% | 0.75 |
-| Helsinki | 42.2% | 0.92 |
-| Ankara | 41.8% | 0.81 |
-| Singapore | 41.6% | 0.77 |
-| Tel Aviv | 41.4% | 0.78 |
-| Buenos Aires | 35.6% | 0.99 |
-| Seoul | 34.6% | 1.00 |
-| Toronto | 33.3% | 1.13 |
-| Tokyo | 32.8% | 0.98 |
-| São Paulo | 32.0% | 1.04 |
-
-## Data Sources
-
-- **NWP forecasts:** [Open-Meteo Previous Runs API](https://previous-runs-api.open-meteo.com/) — `temperature_2m_previous_day1` variable for 24h-ahead forecasts
-- **Ground truth:** Weather Company V1 API — daily T_max at airport ICAO stations
-- **Climatology:** [Open-Meteo Climate API](https://climate-api.open-meteo.com/) — ERA5 1991-2020 normals
-- **Markets:** Polymarket Gamma API + CLOB `/price` endpoint (downstream application)
-
-## Notes
-
-This project explores statistical postprocessing of ensemble weather forecasts — a well-established field in meteorology. The downstream application is automated trading on Polymarket temperature prediction markets, but the methodology applies to any setting requiring calibrated short-term temperature forecasts (renewable energy, agriculture, climate risk assessment).
+Polymarket Gamma / Data / CLOB APIs (trades are also public on-chain), Open-Meteo (CC BY 4.0,
+upstream model licences apply), ECMWF open data (CC BY 4.0), NOAA aviationweather.gov and
+Iowa Environmental Mesonet (METAR, 1-minute ASOS), JMA, data.gov.sg (NEA). Check each source's
+terms before redistributing data.
