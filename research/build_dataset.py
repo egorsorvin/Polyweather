@@ -225,7 +225,7 @@ def finish(out: Path, stats):
                            if c in stations]).to_csv(out / "stations.csv", index=False, encoding="utf-8")
     pd.DataFrame(MODELS, columns=["model", "api", "provider", "type", "first_single_run"]).to_csv(
         out / "models.csv", index=False, encoding="utf-8")
-    (out / "README.md").write_text(CARD, encoding="utf-8")
+    coverage = []
 
     print("\n=== report ===")
     for table, tcol, key in (("single_runs", "run_utc", ["city", "model", "run_utc", "valid_utc", "var"]),
@@ -258,6 +258,12 @@ def finish(out: Path, stats):
         agg["first"] = agg["first"].dt.strftime("%Y-%m-%d")
         agg["last"] = agg["last"].dt.strftime("%Y-%m-%d")
         print(agg.to_string())
+        cov = agg.reset_index()[["var", "model", "cities", "rows", "first", "last"]]
+        coverage.append(f"### Coverage: `{table}` ({rows:,} rows, {files[0].stem} .. {files[-1].stem})\n\n"
+                        + "| var | model | cities | rows | first | last |\n|---|---|---|---|---|---|\n"
+                        + "\n".join(f"| {r.var} | {r.model} | {r.cities} | {r.rows:,} | {r.first} | {r.last} |"
+                                     for r in cov.itertuples()))
+    (out / "README.md").write_text(CARD.replace("{coverage}", "\n\n".join(coverage)), encoding="utf-8")
     size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
     print(f"\ntotal size: {size / 1e6:.1f} MB in {out}")
 
@@ -265,8 +271,22 @@ def finish(out: Path, stats):
 CARD = """---
 license: cc-by-4.0
 pretty_name: PolyWeather forecasts
+language:
+- en
+task_categories:
+- time-series-forecasting
+tags:
+- weather
+- weather-forecasting
+- nwp
+- probabilistic-forecasting
+- prediction-markets
+- polymarket
+size_categories:
+- 100M<n<1B
 configs:
 - config_name: single_runs
+  default: true
   data_files: "single_runs/*.parquet"
 - config_name: previous_runs
   data_files: "previous_runs/*.parquet"
@@ -314,6 +334,15 @@ From 2024-01-01. Lead is per hour, not per run: values of one "lead_days" row se
 different runs, and lead 1 for late hours can be shorter than 24 h. Fine for pretraining; do not
 use for point-in-time backtests (look-ahead risk).
 File month = month of `valid_utc`.
+
+{coverage}
+
+### Known issues
+* `shortwave_radiation` of ECMWF models has small negative values (down to about -23 W/m2), an
+  artefact of de-accumulation; clip at 0.
+* `cma_grapes_global` (previous_runs) has rare implausible values (down to about -63 C); filter
+  values far from the other models.
+* `ecmwf_aifs025_single` has `shortwave_radiation` for about 95 % of runs.
 
 ### Reference
 * `stations.csv` — settlement station per city (ICAO, coordinates, elevation, timezone, unit).
