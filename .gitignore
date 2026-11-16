@@ -14,3 +14,9 @@ data/raw/
 logs/
 data/state.json
 __pycache__/
+
+# forecast data lives on Hugging Face (research/build_dataset.py)
+data/dataset/
+data/forecasts/single-extras/
+data/forecasts/single-0618/
+data/forecasts/previous-extras/
