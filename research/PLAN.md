@@ -25,7 +25,7 @@
 ### Пользователь
 - [ ] **Поставить логгер стакана на сервер** (`logger/README.md`) — срочно, стакан копится только с запуска
 - [ ] Выбрать облачное хранилище для стакана (Cloudflare R2 / Backblaze B2)
-- [ ] Раз в неделю докачивать прогнозы → `python research/build_dataset.py` → `hf upload egor228337/polyweather-data data\\dataset . --repo-type dataset`:
+- [ ] Раз в неделю докачивать прогнозы → `python research/build_dataset.py` → `hf upload egor228337/polyweather-data data\dataset . --repo-type dataset`:
   `python research/fetch_forecasts.py single --start 2026-04-02; python research/fetch_forecasts.py extra --preset single-extras; python research/fetch_forecasts.py extra --preset single-0618; python research/fetch_forecasts.py previous --start 2024-01-01; python research/fetch_forecasts.py extra --preset previous-extras --start 2024-01-01`
 
 ### Данные (Claude)
