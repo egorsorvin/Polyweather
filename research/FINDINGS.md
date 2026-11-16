@@ -319,6 +319,41 @@ data collection.
 
 ---
 
+## 16. B3: B2.1 with the new forecast data (ablation) — `research/b3_model.py`
+
+Same 225,418 states, same METAR / skill features, same model and evaluation as §15; only the
+forecast features change. Forecasts from the rebuilt dataset (`research/build_dataset.py`,
+Hugging Face `polyweather-data`, runs up to 2026-11-08). 1.26 M live bucket-states, 7,733 events.
+
+* V0 = B2.1 as stored; V1 = same features recomputed from the new dataset (99 % identical values,
+  same score: the dataset reproduces the old files);
+* V2 = + 06/18z runs and per-model publication lag (ICON / GFS / ARPEGE 5 h, JMA 6, GEM 7,
+  ECMWF / AIFS / UKMO 8 h; conservative guesses, not measured yet);
+* V3 = + forecast weather of day D, local 08–18 (cloud cover, radiation, wind, dew point;
+  mean of ICON / IFS / AIFS);
+* V4 = + inside D: max over the remaining hours of the newest run (also partial runs).
+
+| Brier gap to market | V0 | V2 | V3 | V4 |
+|---|---|---|---|---|
+| all | +14.8 % | +13.5 % | +13.0 % | **+12.7 %** |
+| D−1 12–23 | +8.2 % | +7.5 % | +6.9 % | +6.9 % |
+| D 00–05 | +9.8 % | +8.7 % | +8.1 % | +8.1 % |
+| D 06–11 | +11.4 % | +10.2 % | +9.7 % | +9.8 % |
+| D 12–18 | +43.1 % | +40.1 % | +40.2 % | +38.4 % |
+
+Log loss: market 0.2463, V0 0.2865 → V4 0.2804. Every block of data helps a little (fresher runs
+the most, then weather variables; radiation and cloud cover enter the top features), but the
+model is still clearly worse than the market, most of all on day D afternoon.
+Walk-forward logit blend market + V4: weight of the model 0.10 → 0.16, Brier 0.07938 → 0.07925
+(−0.2 %): the model now adds a little information to the price, but very little.
+
+Dynamic trading (same rules as §15): V4 margin 5 % → 28,717 bets, ROI +3.4 %, t 4.0 (V0: +1.8 %,
+t 2.1); margin 10 % → +3.4 %, t 3.4 (V0 +3.2 %). Same caveats as §15: exploratory, many variants
+tried on the same period, entry at other takers' fills, publication lags not yet measured. Not a
+confirmed edge; the final check stays on a held-out period after data collection.
+
+---
+
 ## Appendix A. Audit of the old bot (Nov 2026, before the recon)
 
 Methodology: optimised bucket accuracy / MAE instead of calibrated probabilities; probabilities
