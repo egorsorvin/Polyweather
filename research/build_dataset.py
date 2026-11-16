@@ -29,6 +29,7 @@ conflicting duplicates (same key, different value), negative lead times.
 
 Usage:
   python research/build_dataset.py
+  python research/build_dataset.py --finish-only   # tables already built: card + report only
   hf upload <user>/polyweather-data data/dataset . --repo-type dataset --delete "forecasts/*"
 """
 import argparse
@@ -177,15 +178,21 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--src", default=str(SRC))
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--finish-only", action="store_true",
+                    help="parquet tables already built: only write reference files, card and report")
     args = ap.parse_args()
     SRC, out = Path(args.src), Path(args.out)
+    stats = {t: {"exact_dups": 0, "conflicts": 0} for t in ("single_runs", "previous_runs")}
+    if not args.finish_only:
+        build(out, stats)
+    finish(out, stats if not args.finish_only else None)
+
+
+def build(out: Path, stats: dict):
     if out.exists():
         shutil.rmtree(out)
     tmp = out / "_tmp"
     stations = pd.read_csv("data/stations.csv")
-    stats = {t: {"rows": 0, "exact_dups": 0, "conflicts": 0, "neg_lead": 0} for t in ("single_runs", "previous_runs")}
-    summary = {"single_runs": [], "previous_runs": []}
-
     for city in stations["city"]:
         for table, fn, key, mcol in (
             ("single_runs", single_city, ["model", "run_utc", "valid_utc", "var"], "run_utc"),
@@ -195,51 +202,62 @@ def main():
             if d.empty:
                 continue
             d = dedup(d, key, stats, table)
-            if table == "single_runs":
-                stats[table]["neg_lead"] += int((d["lead_h"] < 0).sum())
-            stats[table]["rows"] += len(d)
-            summary[table].append(d.groupby(["model", "var"], observed=True).agg(
-                rows=("value", "size"), first=(mcol, "min"), last=(mcol, "max")).assign(city=city))
             month = d[mcol].dt.strftime("%Y-%m")
             for m, part in d.groupby(month):
                 (tmp / table / m).mkdir(parents=True, exist_ok=True)
                 part.to_parquet(tmp / table / m / f"{city}.parquet", index=False)
         print(f"{city:14s} done")
-
-    months = {
-        "single_runs": write_months(tmp, "single_runs", "run_utc", out,
-                                    ["city", "model", "var", "run_utc", "valid_utc"]),
-        "previous_runs": write_months(tmp, "previous_runs", "valid_utc", out,
-                                      ["city", "model", "var", "lead_days", "valid_utc"]),
-    }
+    write_months(tmp, "single_runs", "run_utc", out, ["city", "model", "var", "run_utc", "valid_utc"])
+    write_months(tmp, "previous_runs", "valid_utc", out, ["city", "model", "var", "lead_days", "valid_utc"])
     shutil.rmtree(tmp, ignore_errors=True)
 
+
+def finish(out: Path, stats):
+    """Reference tables, dataset card, and a report computed from the written parquet files."""
+    stations = pd.read_csv("data/stations.csv")
     miss = SRC / "_missing_single.txt"
     if miss.exists():
-        rows = [l.split("|") for l in miss.read_text().split() if l.count("|") == 2]
+        rows = [l.split("|") for l in miss.read_text(encoding="utf-8").split() if l.count("|") == 2]
         m = pd.DataFrame(rows, columns=["city", "run_utc", "model"]).drop_duplicates()
         m["run_utc"] = pd.to_datetime(m["run_utc"], utc=True)
         m.sort_values(["city", "run_utc", "model"]).to_parquet(out / "missing_single_runs.parquet", index=False)
     stations.drop(columns=[c for c in ("n_events", "volume_musd", "first_event", "last_event")
-                           if c in stations], errors="ignore").to_csv(out / "stations.csv", index=False)
+                           if c in stations]).to_csv(out / "stations.csv", index=False, encoding="utf-8")
     pd.DataFrame(MODELS, columns=["model", "api", "provider", "type", "first_single_run"]).to_csv(
-        out / "models.csv", index=False)
-    write_card(out, stats)
+        out / "models.csv", index=False, encoding="utf-8")
+    (out / "README.md").write_text(CARD, encoding="utf-8")
 
-    # ── report ──
     print("\n=== report ===")
-    for table in ("single_runs", "previous_runs"):
-        s = stats[table]
-        print(f"\n{table}: {s['rows']:,} rows, months {months[table][:1]}..{months[table][-1:]}, "
-              f"exact dups removed {s['exact_dups']:,}, conflicting dups {s['conflicts']:,}"
-              + (f", negative lead {s['neg_lead']:,}" if table == "single_runs" else ""))
-        if summary[table]:
-            sm = pd.concat(summary[table]).reset_index()
-            agg = sm.groupby(["var", "model"]).agg(cities=("city", "nunique"), rows=("rows", "sum"),
-                                                   first=("first", "min"), last=("last", "max"))
-            agg["first"] = agg["first"].dt.strftime("%Y-%m-%d")
-            agg["last"] = agg["last"].dt.strftime("%Y-%m-%d")
-            print(agg.to_string())
+    for table, tcol, key in (("single_runs", "run_utc", ["city", "model", "run_utc", "valid_utc", "var"]),
+                             ("previous_runs", "valid_utc", ["city", "model", "valid_utc", "lead_days", "var"])):
+        files = sorted((out / table).glob("*.parquet"))
+        if not files:
+            print(f"\n{table}: no files")
+            continue
+        parts, rows, dups, neg = [], 0, 0, 0
+        for f in files:                                      # one month at a time (bounded memory)
+            d = pd.read_parquet(f)
+            rows += len(d)
+            dups += int(d.duplicated(key).sum())
+            if "lead_h" in d:
+                neg += int((d["lead_h"] < 0).sum())
+            parts.append(d.groupby(["var", "model"], observed=True).agg(
+                cities=("city", "nunique"), rows=("value", "size"), first=(tcol, "min"), last=(tcol, "max"),
+                vmin=("value", "min"), vmax=("value", "max")))
+        line = f"\n{table}: {rows:,} rows, {len(files)} months ({files[0].stem}..{files[-1].stem}), " \
+               f"duplicate keys in output {dups:,}"
+        if table == "single_runs":
+            line += f", negative lead {neg:,}"
+        if stats:
+            line += f"; removed while building: exact dups {stats[table]['exact_dups']:,}, " \
+                    f"conflicting {stats[table]['conflicts']:,}"
+        print(line)
+        agg = pd.concat(parts).groupby(level=[0, 1]).agg(
+            cities=("cities", "max"), rows=("rows", "sum"), first=("first", "min"), last=("last", "max"),
+            vmin=("vmin", "min"), vmax=("vmax", "max"))
+        agg["first"] = agg["first"].dt.strftime("%Y-%m-%d")
+        agg["last"] = agg["last"].dt.strftime("%Y-%m-%d")
+        print(agg.to_string())
     size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
     print(f"\ntotal size: {size / 1e6:.1f} MB in {out}")
 
@@ -271,7 +289,7 @@ Open-Meteo Single Runs API: the complete output of one model run. Use for honest
 | model | str | Open-Meteo model id, see `models.csv` |
 | run_utc | timestamp UTC | model initialisation time (00/06/12/18z) |
 | valid_utc | timestamp UTC | forecast hour |
-| lead_h | int | valid_utc − run_utc, hours (0–71) |
+| lead_h | int | valid_utc - run_utc, hours (0–71) |
 | var | str | temperature_2m (°C), dew_point_2m (°C), shortwave_radiation (W/m², preceding-hour mean), cloud_cover (%), wind_speed_10m (km/h), wind_direction_10m (°) |
 | value | float32 | value |
 
@@ -315,10 +333,6 @@ df = pd.read_parquet(f"{path}/single_runs")          # all months
 Weather data by [Open-Meteo.com](https://open-meteo.com/), CC BY 4.0; upstream model licences
 apply (ECMWF, DWD, NOAA, ECCC, UK Met Office, JMA, Météo-France, CMA).
 """
-
-
-def write_card(out: Path, stats: dict):
-    (out / "README.md").write_text(CARD)
 
 
 if __name__ == "__main__":
